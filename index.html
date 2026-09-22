@@ -95,10 +95,10 @@
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Viento Patagónico (GFS)</span>
                 <div class="flex items-baseline gap-2 mt-2">
-                    <span id="cardWind" class="text-4xl font-extrabold text-white">-- km/h</span>
+                    <span id="cardWind" class="text-2xl font-extrabold text-white">-- nudos</span>
                     <span id="cardWindDir" class="text-xs text-blue-400 font-medium">WNW</span>
                 </div>
-                <p class="text-xs text-slate-400 mt-2">Rachas máximas: <span id="cardWindGust" class="text-slate-200 font-medium">-- km/h</span></p>
+                <p class="text-xs text-slate-400 mt-2">Rachas: <span id="cardWindGust" class="text-slate-200 font-medium">-- nudos</span></p>
             </div>
 
             <!-- Pressure & Atmosphere -->
@@ -239,7 +239,7 @@
                     <p class="text-xs text-slate-400">Valores interpolados por el modelo Global Forecast System para Punta Arenas</p>
                 </div>
                 <div class="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">
-                    Hora local (CLT / UTC-3)
+                    Hora local (CLT / UTC-3) • Viento en nudos (km/h)
                 </div>
             </div>
 
@@ -251,8 +251,8 @@
                             <th class="py-3 px-4 font-semibold">Estado</th>
                             <th class="py-3 px-4 font-semibold">Temp (°C)</th>
                             <th class="py-3 px-4 font-semibold">Sensación (°C)</th>
-                            <th class="py-3 px-4 font-semibold">Viento (km/h)</th>
-                            <th class="py-3 px-4 font-semibold">Rachas (km/h)</th>
+                            <th class="py-3 px-4 font-semibold">Viento (nudos / km/h)</th>
+                            <th class="py-3 px-4 font-semibold">Rachas (nudos / km/h)</th>
                             <th class="py-3 px-4 font-semibold">Humedad</th>
                             <th class="py-3 px-4 font-semibold">Precip. (mm)</th>
                         </tr>
@@ -279,6 +279,17 @@
         let currentLevel = 'surface';
         let currentHoursCount = 120; // default 5 days
 
+        // Conversion helper: 1 knot = 1.852 km/h
+        function kmhToKnots(kmh) {
+            return kmh / 1.852;
+        }
+
+        // Format wind string: e.g. "13 nudos (25.0 km/h)"
+        function formatWind(kmh) {
+            const knots = kmhToKnots(kmh);
+            return `${knots.toFixed(1)} nudos (${kmh.toFixed(1)} km/h)`;
+        }
+
         // Base forecast generator for Punta Arenas (typical subpolar oceanic climate with strong winds)
         function generateGFSData(hoursCount, level) {
             const data = {
@@ -287,6 +298,8 @@
                 feelsLike: [],
                 winds: [],
                 gusts: [],
+                windsKnots: [],
+                gustsKnots: [],
                 humidity: [],
                 precip: [],
                 conditions: [],
@@ -312,11 +325,17 @@
                 data.temps.push(parseFloat(baseTemp.toFixed(1)));
 
                 // Sensacion termica (wind chill adjusted)
-                const windSpeed = 25 + Math.sin(i * 0.2) * 15;
-                data.winds.push(Math.round(windSpeed));
-                data.gusts.push(Math.round(windSpeed * 1.4));
+                const windSpeedKmh = 25 + Math.sin(i * 0.2) * 15;
+                const windSpeedKnots = kmhToKnots(windSpeedKmh);
+                const gustKmh = windSpeedKmh * 1.4;
+                const gustKnots = kmhToKnots(gustKmh);
 
-                const windChill = baseTemp < 10 ? baseTemp - (windSpeed * 0.08) : baseTemp - 0.5;
+                data.winds.push(parseFloat(windSpeedKmh.toFixed(1)));
+                data.gusts.push(parseFloat(gustKmh.toFixed(1)));
+                data.windsKnots.push(parseFloat(windSpeedKnots.toFixed(1)));
+                data.gustsKnots.push(parseFloat(gustKnots.toFixed(1)));
+
+                const windChill = baseTemp < 10 ? baseTemp - (windSpeedKmh * 0.08) : baseTemp - 0.5;
                 data.feelsLike.push(parseFloat(windChill.toFixed(1)));
 
                 // Humidity & Precip
@@ -329,7 +348,7 @@
 
                 // Conditions
                 if (precipVal > 0.5) data.conditions.push({ text: 'Lluvia / Chubascos', icon: 'fa-cloud-rain', color: 'text-blue-400' });
-                else if (windSpeed > 35) data.conditions.push({ text: 'Viento Fuerte', icon: 'fa-wind', color: 'text-amber-400' });
+                else if (windSpeedKmh > 35) data.conditions.push({ text: 'Viento Fuerte', icon: 'fa-wind', color: 'text-amber-400' });
                 else if (diurnalCycle > 1) data.conditions.push({ text: 'Parcialmente Nuboso', icon: 'fa-cloud-sun', color: 'text-cyan-400' });
                 else data.conditions.push({ text: 'Nublado', icon: 'fa-cloud', color: 'text-slate-400' });
             }
@@ -384,7 +403,26 @@
                             borderColor: '#334155',
                             borderWidth: 1,
                             padding: 12,
-                            boxPadding: 6
+                            boxPadding: 6,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y + '°C';
+                                    }
+                                    return label;
+                                },
+                                afterBody: function(tooltipItems) {
+                                    const index = tooltipItems[0].dataIndex;
+                                    // Retrieve wind data from global or reconstruct
+                                    const wKnot = gfsChart.data.customWindsKnots ? gfsChart.data.customWindsKnots[index] : 0;
+                                    const wKmh = gfsChart.data.customWindsKmh ? gfsChart.data.customWindsKmh[index] : 0;
+                                    return `Viento: ${wKnot} nudos (${wKmh} km/h)`;
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -405,6 +443,10 @@
                 }
             });
 
+            // Store custom dataset references for tooltip callback
+            gfsChart.data.customWindsKnots = data.windsKnots;
+            gfsChart.data.customWindsKmh = data.winds;
+
             updateTopCards(data);
             updateTable(data);
         }
@@ -413,8 +455,9 @@
         function updateTopCards(data) {
             document.getElementById('cardTemp').innerText = data.temps[0] + '°C';
             document.getElementById('cardSensacion').innerText = data.feelsLike[0] + '°C';
-            document.getElementById('cardWind').innerText = data.winds[0] + ' km/h';
-            document.getElementById('cardWindGust').innerText = data.gusts[0] + ' km/h';
+            document.getElementById('cardWind').innerText = data.windsKnots[0] + ' nudos';
+            document.getElementById('cardWind').title = `${data.winds[0]} km/h`;
+            document.getElementById('cardWindGust').innerText = data.gustsKnots[0] + ' nudos';
             document.getElementById('cardPressure').innerText = data.pressures[0] + ' hPa';
             document.getElementById('cardHumidity').innerText = data.humidity[0] + '%';
             document.getElementById('cardPrecip').innerText = data.precip[0] + ' mm/3h';
@@ -443,8 +486,8 @@
                     </td>
                     <td class="py-3 px-4 font-bold text-blue-400">${data.temps[i]}°C</td>
                     <td class="py-3 px-4 text-cyan-400">${data.feelsLike[i]}°C</td>
-                    <td class="py-3 px-4">${data.winds[i]} km/h</td>
-                    <td class="py-3 px-4 text-slate-400">${data.gusts[i]} km/h</td>
+                    <td class="py-3 px-4 font-medium text-blue-200">${data.windsKnots[i]} nudos <span class="text-slate-400 text-[10px]">(${data.winds[i]} km/h)</span></td>
+                    <td class="py-3 px-4 text-slate-300">${data.gustsKnots[i]} nudos <span class="text-slate-500 text-[10px]">(${data.gusts[i]} km/h)</span></td>
                     <td class="py-3 px-4">${data.humidity[i]}%</td>
                     <td class="py-3 px-4 text-cyan-300">${data.precip[i]} mm</td>
                 `;
@@ -488,6 +531,8 @@
             gfsChart.data.labels = newData.labels;
             gfsChart.data.datasets[0].data = newData.temps;
             gfsChart.data.datasets[1].data = newData.feelsLike;
+            gfsChart.data.customWindsKnots = newData.windsKnots;
+            gfsChart.data.customWindsKmh = newData.winds;
             gfsChart.update();
             updateTopCards(newData);
             updateTable(newData);
