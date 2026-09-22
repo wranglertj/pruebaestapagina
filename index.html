@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pronóstico GFS Punta Arenas - Modelo Meteorológico</title>
+    <title>Pronóstico GFS Punta Arenas - Open-Meteo API</title>
     <!-- Tailwind CSS for modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -30,7 +30,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.75);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -52,18 +52,18 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                        GFS Punta Arenas <span class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">NOAA Model</span>
+                        GFS Punta Arenas <span class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Open-Meteo GFS 0.25°</span>
                     </h1>
-                    <p class="text-xs text-slate-400">Sistema Global de Pronóstico (Global Forecast System) • 53.16° S, 70.91° W</p>
+                    <p class="text-xs text-slate-400">Modelo Global Forecast System • 53.16° S, 70.91° W (Magallanes, Chile)</p>
                 </div>
             </div>
             
             <div class="flex items-center gap-3">
                 <div id="syncStatus" class="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                    <span>GFS Sincronizado (Último ciclo: 00Z)</span>
+                    <span id="syncText">Cargando última corrida GFS...</span>
                 </div>
-                <button onclick="refreshData()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+                <button onclick="fetchGFSData()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition flex items-center gap-1.5">
                     <i class="fa-solid fa-rotate-right"></i> Actualizar
                 </button>
             </div>
@@ -80,12 +80,12 @@
                 <div class="absolute -right-4 -bottom-4 text-slate-800 text-7xl font-bold opacity-20 pointer-events-none group-hover:scale-110 transition">
                     <i class="fa-solid fa-temperature-half"></i>
                 </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Temperatura del Aire</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Temperatura del Aire (2m)</span>
                 <div class="flex items-baseline gap-2 mt-2">
                     <span id="cardTemp" class="text-4xl font-extrabold text-white">--°C</span>
-                    <span id="cardTempTrend" class="text-xs text-emerald-400 font-medium"><i class="fa-solid fa-arrow-up"></i> +0.4° vs ayer</span>
+                    <span id="cardSensacion" class="text-xs text-cyan-400 font-medium">St: --°C</span>
                 </div>
-                <p class="text-xs text-slate-400 mt-2">Sensación térmica: <span id="cardSensacion" class="text-slate-200 font-medium">--°C</span></p>
+                <p class="text-xs text-slate-400 mt-2">Humedad: <span id="cardHumidity" class="text-slate-200 font-medium">--%</span></p>
             </div>
 
             <!-- Wind Speed & Direction -->
@@ -95,10 +95,9 @@
                 </div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Viento Patagónico (GFS)</span>
                 <div class="flex items-baseline gap-2 mt-2">
-                    <span id="cardWind" class="text-2xl font-extrabold text-white">-- nudos</span>
-                    <span id="cardWindDir" class="text-xs text-blue-400 font-medium">WNW</span>
+                    <span id="cardWind" class="text-lg font-extrabold text-white">-- nudos (-- km/h)</span>
                 </div>
-                <p class="text-xs text-slate-400 mt-2">Rachas: <span id="cardWindGust" class="text-slate-200 font-medium">-- nudos</span></p>
+                <p class="text-xs text-slate-400 mt-2">Rachas máximas: <span id="cardWindGust" class="text-slate-200 font-medium">-- nudos (-- km/h)</span></p>
             </div>
 
             <!-- Pressure & Atmosphere -->
@@ -109,41 +108,41 @@
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Presión Superficial</span>
                 <div class="flex items-baseline gap-2 mt-2">
                     <span id="cardPressure" class="text-4xl font-extrabold text-white">-- hPa</span>
-                    <span class="text-xs text-amber-400 font-medium"><i class="fa-solid fa-circle-notch animate-spin"></i> Estable</span>
+                    <span class="text-xs text-emerald-400 font-medium"><i class="fa-solid fa-check"></i> Activo</span>
                 </div>
-                <p class="text-xs text-slate-400 mt-2">Cota de Nieve: <span id="cardSnowLevel" class="text-slate-200 font-medium">-- m s.n.m.</span></p>
+                <p class="text-xs text-slate-400 mt-2">Cobertura Nubosa: <span id="cardCloud" class="text-slate-200 font-medium">--%</span></p>
             </div>
 
-            <!-- Humidity & Precipitation -->
+            <!-- Precipitation -->
             <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-blue-500/40 transition">
                 <div class="absolute -right-4 -bottom-4 text-slate-800 text-7xl font-bold opacity-20 pointer-events-none group-hover:scale-110 transition">
-                    <i class="fa-solid fa-droplet"></i>
+                    <i class="fa-solid fa-cloud-rain"></i>
                 </div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Humedad y Precipitación</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Precipitación GFS</span>
                 <div class="flex items-baseline gap-2 mt-2">
-                    <span id="cardHumidity" class="text-4xl font-extrabold text-white">--%</span>
-                    <span id="cardPrecip" class="text-xs text-cyan-400 font-medium">0.0 mm/3h</span>
+                    <span id="cardPrecip" class="text-3xl font-extrabold text-white">-- mm</span>
+                    <span id="cardPrecipProb" class="text-xs text-cyan-400 font-medium">Prob: --%</span>
                 </div>
-                <p class="text-xs text-slate-400 mt-2">Prob. Precipitaciones: <span id="cardPrecipProb" class="text-slate-200 font-medium">--%</span></p>
+                <p class="text-xs text-slate-400 mt-2">Estado: <span id="cardPrecipStatus" class="text-slate-200 font-medium">Sin precipitaciones</span></p>
             </div>
         </div>
 
-        <!-- Controls Bar for Graph & Pressure Level -->
+        <!-- Controls Bar for Graph & Variable Selection -->
         <div class="glass-panel rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide mr-2">Nivel de Presión (GFS):</span>
-                <button onclick="setLevel('surface')" id="btn-surface" class="level-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-blue-600 text-white shadow-md shadow-blue-600/30">Superficie (2m)</button>
-                <button onclick="setLevel('925hpa')" id="btn-925hpa" class="level-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">925 hPa (~750m)</button>
-                <button onclick="setLevel('850hpa')" id="btn-850hpa" class="level-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">850 hPa (~1.5km)</button>
-                <button onclick="setLevel('500hpa')" id="btn-500hpa" class="level-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">500 hPa (~5.5km)</button>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide mr-2">Métrica GFS:</span>
+                <button onclick="setActiveMetric('temperature')" id="btn-temperature" class="metric-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-blue-600 text-white shadow-md shadow-blue-600/30">Temperatura y Sensación</button>
+                <button onclick="setActiveMetric('wind')" id="btn-wind" class="metric-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">Viento y Rachas (Nudos)</button>
+                <button onclick="setActiveMetric('precipitation')" id="btn-precipitation" class="metric-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">Precipitación</button>
+                <button onclick="setActiveMetric('pressure')" id="btn-pressure" class="metric-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">Presión Atmosférica</button>
             </div>
             
             <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">Rango de Pronóstico:</span>
-                <select id="timeRangeSelect" onchange="updateChartRange()" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-blue-500">
-                    <option value="48">Próximas 48 Horas</option>
-                    <option value="120" selected>Próximos 5 Días</option>
-                    <option value="240">Próximos 10 Días (GFS Completo)</option>
+                <span class="text-xs text-slate-400">Días de Pronóstico:</span>
+                <select id="forecastDaysSelect" onchange="fetchGFSData()" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-blue-500">
+                    <option value="3">Próximos 3 Días</option>
+                    <option value="7" selected>Próximos 7 Días (Estándar)</option>
+                    <option value="14">Próximos 14 Días (GFS Extendido)</option>
                 </select>
             </div>
         </div>
@@ -151,18 +150,18 @@
         <!-- Main Graph and Side Panel Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            <!-- Temperature & Weather Chart (2 Cols) -->
+            <!-- Meteorogram Chart (2 Cols) -->
             <div class="glass-panel rounded-2xl p-6 lg:col-span-2 flex flex-col justify-between">
                 <div class="flex justify-between items-center mb-6">
                     <div>
-                        <h2 class="text-base font-bold text-white flex items-center gap-2">
-                            <i class="fa-solid fa-chart-line text-blue-500"></i> Meteorograma de Temperatura GFS
+                        <h2 id="chartTitle" class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-chart-line text-blue-500"></i> Evolución de Temperatura del Aire (GFS)
                         </h2>
-                        <p class="text-xs text-slate-400">Evolución temporal del aire sobre Punta Arenas</p>
+                        <p id="chartSubtitle" class="text-xs text-slate-400">Valores horarios de la última corrida de Open-Meteo GFS</p>
                     </div>
-                    <div class="flex items-center gap-3 text-xs">
-                        <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Temp. Aire</span>
-                        <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span> Sensación</span>
+                    <div id="chartLegendCustom" class="flex items-center gap-3 text-xs">
+                        <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Temp (°C)</span>
+                        <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span> Sensación (°C)</span>
                     </div>
                 </div>
 
@@ -172,8 +171,8 @@
                 </div>
 
                 <div class="mt-4 pt-4 border-t border-slate-800/60 flex justify-between items-center text-xs text-slate-400">
-                    <span id="chartInfoText">Mostrando datos para el nivel de Superficie</span>
-                    <span>Resolución GFS: 0.25° (~25 km)</span>
+                    <span id="runInfoFooter">Conectando a NOAA GFS 0.25°...</span>
+                    <span>Zona horaria: America/Punta_Arenas</span>
                 </div>
             </div>
 
@@ -181,21 +180,19 @@
             <div class="glass-panel rounded-2xl p-6 flex flex-col justify-between space-y-4">
                 <div>
                     <h2 class="text-base font-bold text-white flex items-center gap-2 mb-1">
-                        <i class="fa-solid fa-map-location-dot text-blue-500"></i> Ubicación Punta Arenas
+                        <i class="fa-solid fa-satellite text-blue-500"></i> Estado del Modelo GFS
                     </h2>
-                    <p class="text-xs text-slate-400 mb-4">Punto de grilla GFS más cercano al Estrecho de Magallanes.</p>
+                    <p class="text-xs text-slate-400 mb-4">Información en vivo de la última sincronización.</p>
                     
                     <!-- Simulated Map / Coordinates Card -->
                     <div class="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center">
-                        <!-- Background decoration representing map topography -->
                         <div class="absolute inset-0 opacity-40 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
                         <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
                         
-                        <!-- Radar pulse pin -->
                         <div class="relative z-10 flex flex-col items-center">
                             <div class="w-4 h-4 bg-blue-500 rounded-full animate-ping absolute"></div>
                             <div class="w-4 h-4 bg-blue-600 border-2 border-white rounded-full shadow-lg relative z-10"></div>
-                            <span class="bg-slate-900/90 text-white px-2 py-0.5 rounded text-[10px] font-semibold mt-2 border border-slate-700">Punta Arenas (53.1°S, 70.9°W)</span>
+                            <span class="bg-slate-900/90 text-white px-2 py-0.5 rounded text-[10px] font-semibold mt-2 border border-slate-700">Punta Arenas (-53.16°, -70.91°)</span>
                         </div>
                     </div>
                 </div>
@@ -203,43 +200,43 @@
                 <!-- Station Quick Specs -->
                 <div class="space-y-2.5 text-xs">
                     <div class="flex justify-between py-1.5 border-b border-slate-800/80">
-                        <span class="text-slate-400">Altitud de la Estación:</span>
-                        <span class="font-medium text-slate-200">37 m s.n.m.</span>
+                        <span class="text-slate-400">Última Corrida GFS:</span>
+                        <span id="specRunTime" class="font-medium text-emerald-400">Sincronizando...</span>
                     </div>
                     <div class="flex justify-between py-1.5 border-b border-slate-800/80">
-                        <span class="text-slate-400">Modelo GFS Ciclo:</span>
-                        <span class="font-medium text-slate-200">2026-09-22 00:00 UTC</span>
+                        <span class="text-slate-400">Resolución Espacial:</span>
+                        <span class="font-medium text-slate-200">0.25° (~25 km)</span>
                     </div>
                     <div class="flex justify-between py-1.5 border-b border-slate-800/80">
                         <span class="text-slate-400">Viento Dominante:</span>
-                        <span class="font-medium text-slate-200">Oeste (W) - Zonda Patagónica</span>
+                        <span id="specWindDir" class="font-medium text-blue-300">Oeste (W)</span>
                     </div>
                     <div class="flex justify-between py-1.5">
-                        <span class="text-slate-400">Estado del Cielo:</span>
-                        <span id="skyCondition" class="font-medium text-cyan-400">Parcialmente Nuboso</span>
+                        <span class="text-slate-400">Altitud de Referencia:</span>
+                        <span class="font-medium text-slate-200">37 m s.n.m.</span>
                     </div>
                 </div>
 
                 <div class="pt-2">
-                    <button onclick="openExternalNOAA()" class="w-full py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Ver GFS Oficial NOAA
+                    <button onclick="openOpenMeteoDocs()" class="w-full py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-code"></i> Ver API Open-Meteo GFS
                     </button>
                 </div>
             </div>
 
         </div>
 
-        <!-- Detailed Hourly / 3-Hourly Forecast Table -->
+        <!-- Detailed Hourly Forecast Table -->
         <div class="glass-panel rounded-2xl p-6">
             <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <div>
                     <h3 class="text-base font-bold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-table-list text-blue-500"></i> Tabla de Pronóstico GFS (Próximas 24 Horas)
+                        <i class="fa-solid fa-table-list text-blue-500"></i> Desglose Horario GFS (Próximas 48 Horas)
                     </h3>
-                    <p class="text-xs text-slate-400">Valores interpolados por el modelo Global Forecast System para Punta Arenas</p>
+                    <p class="text-xs text-slate-400">Datos directos de temperatura, viento en nudos (km/h), presión y precipitaciones</p>
                 </div>
                 <div class="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">
-                    Hora local (CLT / UTC-3) • Viento en nudos (km/h)
+                    Hora local (CLT) • Viento expresado en nudos y km/h
                 </div>
             </div>
 
@@ -247,18 +244,18 @@
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="border-b border-slate-700/80 text-slate-400 uppercase tracking-wider">
-                            <th class="py-3 px-4 font-semibold">Hora</th>
+                            <th class="py-3 px-4 font-semibold">Hora (CLT)</th>
                             <th class="py-3 px-4 font-semibold">Estado</th>
                             <th class="py-3 px-4 font-semibold">Temp (°C)</th>
                             <th class="py-3 px-4 font-semibold">Sensación (°C)</th>
-                            <th class="py-3 px-4 font-semibold">Viento (nudos / km/h)</th>
-                            <th class="py-3 px-4 font-semibold">Rachas (nudos / km/h)</th>
+                            <th class="py-3 px-4 font-semibold">Viento (10m)</th>
+                            <th class="py-3 px-4 font-semibold">Rachas</th>
                             <th class="py-3 px-4 font-semibold">Humedad</th>
                             <th class="py-3 px-4 font-semibold">Precip. (mm)</th>
                         </tr>
                     </thead>
                     <tbody id="forecastTableBody" class="divide-y divide-slate-800/60 text-slate-300">
-                        <!-- Populated by JS -->
+                        <!-- Populated dynamically -->
                     </tbody>
                 </table>
             </div>
@@ -268,127 +265,268 @@
 
     <!-- Footer -->
     <footer class="mt-auto border-t border-slate-800/80 bg-slate-950/40 py-6 px-6 text-center text-xs text-slate-500">
-        <p>Datos simulados basados en parámetros reales del modelo GFS de la NOAA para Punta Arenas, Región de Magallanes y de la Antártica Chilena.</p>
-        <p class="mt-1">Desarrollado para visualización meteorológica avanzada • GFS 0.25 Degree Forecast</p>
+        <p>Datos proporcionados por la API gratuita de Open-Meteo utilizando el modelo meteorológico GFS (Global Forecast System) de la NOAA.</p>
+        <p class="mt-1">Punta Arenas, Región de Magallanes y de la Antártica Chilena • Actualizado automáticamente en cada recarga</p>
     </footer>
 
     <!-- Application Script -->
     <script>
-        // Global variables for Chart and State
+        // Global variables for Chart and API Data
         let gfsChart = null;
-        let currentLevel = 'surface';
-        let currentHoursCount = 120; // default 5 days
+        let globalWeatherData = null;
+        let activeMetric = 'temperature';
 
-        // Conversion helper: 1 knot = 1.852 km/h
+        // Conversion helper: 1 km/h = 0.539957 knots
         function kmhToKnots(kmh) {
-            return kmh / 1.852;
+            return kmh * 0.539957;
         }
 
-        // Format wind string: e.g. "13 nudos (25.0 km/h)"
+        // Format wind string: e.g. "13.5 nudos (25.0 km/h)"
         function formatWind(kmh) {
+            if (kmh === undefined || kmh === null) return '-- nudos (-- km/h)';
             const knots = kmhToKnots(kmh);
             return `${knots.toFixed(1)} nudos (${kmh.toFixed(1)} km/h)`;
         }
 
-        // Base forecast generator for Punta Arenas (typical subpolar oceanic climate with strong winds)
-        function generateGFSData(hoursCount, level) {
-            const data = {
-                labels: [],
-                temps: [],
-                feelsLike: [],
-                winds: [],
-                gusts: [],
-                windsKnots: [],
-                gustsKnots: [],
-                humidity: [],
-                precip: [],
-                conditions: [],
-                pressures: []
-            };
-
-            const now = new Date();
-            // Adjust temperature based on pressure levels (lapse rate simulation)
-            let altitudeTempOffset = 0;
-            if (level === '925hpa') altitudeTempOffset = -3.5;
-            if (level === '850hpa') altitudeTempOffset = -7.0;
-            if (level === '500hpa') altitudeTempOffset = -28.5;
-
-            for (let i = 0; i < hoursCount; i += 3) {
-                const forecastTime = new Date(now.getTime() + i * 3600 * 1000);
-                const timeString = forecastTime.toLocaleDateString('es-CL', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-                data.labels.push(timeString);
-
-                // Punta Arenas diurnal temp cycle (Spring/Summer baseline ~ 4°C to 12°C surface)
-                const hourOfDay = forecastTime.getHours();
-                const diurnalCycle = Math.sin((hourOfDay - 6) / 24 * 2 * Math.PI) * 3.5;
-                const baseTemp = 7.0 + diurnalCycle + altitudeTempOffset + (Math.sin(i * 0.1) * 1.5);
-                data.temps.push(parseFloat(baseTemp.toFixed(1)));
-
-                // Sensacion termica (wind chill adjusted)
-                const windSpeedKmh = 25 + Math.sin(i * 0.2) * 15;
-                const windSpeedKnots = kmhToKnots(windSpeedKmh);
-                const gustKmh = windSpeedKmh * 1.4;
-                const gustKnots = kmhToKnots(gustKmh);
-
-                data.winds.push(parseFloat(windSpeedKmh.toFixed(1)));
-                data.gusts.push(parseFloat(gustKmh.toFixed(1)));
-                data.windsKnots.push(parseFloat(windSpeedKnots.toFixed(1)));
-                data.gustsKnots.push(parseFloat(gustKnots.toFixed(1)));
-
-                const windChill = baseTemp < 10 ? baseTemp - (windSpeedKmh * 0.08) : baseTemp - 0.5;
-                data.feelsLike.push(parseFloat(windChill.toFixed(1)));
-
-                // Humidity & Precip
-                data.humidity.push(Math.min(95, Math.max(60, Math.round(75 - diurnalCycle * 3))));
-                const precipVal = (Math.sin(i * 0.4) > 0.7) ? parseFloat((Math.random() * 1.2).toFixed(1)) : 0.0;
-                data.precip.push(precipVal);
-
-                // Pressure
-                data.pressures.push(Math.round(1012 + Math.sin(i * 0.05) * 12));
-
-                // Conditions
-                if (precipVal > 0.5) data.conditions.push({ text: 'Lluvia / Chubascos', icon: 'fa-cloud-rain', color: 'text-blue-400' });
-                else if (windSpeedKmh > 35) data.conditions.push({ text: 'Viento Fuerte', icon: 'fa-wind', color: 'text-amber-400' });
-                else if (diurnalCycle > 1) data.conditions.push({ text: 'Parcialmente Nuboso', icon: 'fa-cloud-sun', color: 'text-cyan-400' });
-                else data.conditions.push({ text: 'Nublado', icon: 'fa-cloud', color: 'text-slate-400' });
-            }
-
-            return data;
+        // Get wind direction cardinal label from degrees
+        function getWindDirectionLabel(degrees) {
+            if (degrees === undefined) return 'N/A';
+            const val = Math.floor((degrees / 22.5) + 0.5);
+            const arr = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+            return arr[(val % 16)];
         }
 
-        // Initialize Chart.js Meteorogram
-        function initChart() {
+        // Fetch data from Open-Meteo GFS API
+        async function fetchGFSData() {
+            const syncStatus = document.getElementById('syncStatus');
+            const syncText = document.getElementById('syncText');
+            syncText.innerText = "Consultando API Open-Meteo GFS...";
+            syncStatus.className = "flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20";
+
+            const days = document.getElementById('forecastDaysSelect').value;
+            const url = `https://api.open-meteo.com/v1/gfs?latitude=-53.1638&longitude=-70.9171&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,surface_pressure,cloud_cover,wind_speed_10m,wind_gusts_10m,wind_direction_10m&timezone=America%2FPunta_Arenas&forecast_days=${days}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Error al conectar con la API de Open-Meteo');
+                
+                const data = await response.json();
+                globalWeatherData = data;
+
+                // Update UI status
+                const now = new Date();
+                const runTimeString = now.toISOString().replace('T', ' ').substring(0, 16) + ' UTC';
+                document.getElementById('specRunTime').innerText = `GFS Corrida Activa (${runTimeString})`;
+                
+                syncText.innerText = "GFS Sincronizado (Última corrida)";
+                syncStatus.className = "flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                
+                document.getElementById('runInfoFooter').innerText = `Datos GFS de Open-Meteo cargados exitosamente (${data.hourly.time.length} registros)`;
+
+                updateTopCards(data);
+                updateChart();
+                updateTable(data);
+
+            } catch (error) {
+                console.error(error);
+                syncText.innerText = "Error de conexión GFS";
+                syncStatus.className = "flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20";
+                document.getElementById('runInfoFooter').innerText = "No se pudo actualizar desde la API. Revise su conexión a internet.";
+            }
+        }
+
+        // Update summary cards with current hour data (matching current local hour)
+        function updateTopCards(data) {
+            const nowIso = new Date().toISOString();
+            let currentIndex = 0;
+            
+            // Find closest hour index
+            for (let i = 0; i < data.hourly.time.length; i++) {
+                if (data.hourly.time[i] >= nowIso.substring(0, 13)) {
+                    currentIndex = i;
+                    break;
+                }
+            }
+
+            const temp = data.hourly.temperature_2m[currentIndex];
+            const apparent = data.hourly.apparent_temperature[currentIndex];
+            const humidity = data.hourly.relative_humidity_2m[currentIndex];
+            const windSpeed = data.hourly.wind_speed_10m[currentIndex];
+            const windGust = data.hourly.wind_gusts_10m[currentIndex];
+            const windDirDeg = data.hourly.wind_direction_10m[currentIndex];
+            const pressure = data.hourly.surface_pressure[currentIndex];
+            const cloud = data.hourly.cloud_cover[currentIndex];
+            const precip = data.hourly.precipitation[currentIndex];
+            const precipProb = data.hourly.precipitation_probability[currentIndex];
+
+            document.getElementById('cardTemp').innerText = temp.toFixed(1) + '°C';
+            document.getElementById('cardSensacion').innerText = `St: ${apparent.toFixed(1)}°C`;
+            document.getElementById('cardHumidity').innerText = humidity + '%';
+            document.getElementById('cardWind').innerText = formatWind(windSpeed);
+            document.getElementById('cardWindGust').innerText = formatWind(windGust);
+            document.getElementById('specWindDir').innerText = `${getWindDirectionLabel(windDirDeg)} (${windDirDeg}°)`;
+            document.getElementById('cardPressure').innerText = pressure.toFixed(1) + ' hPa';
+            document.getElementById('cardCloud').innerText = cloud + '%';
+            document.getElementById('cardPrecip').innerText = precip.toFixed(1) + ' mm';
+            document.getElementById('cardPrecipProb').innerText = `Prob: ${precipProb !== null ? precipProb : 0}%`;
+
+            let precipStatusText = "Sin precipitaciones";
+            if (precip > 0.5) precipStatusText = "Lluvia moderada";
+            else if (precip > 0) precipStatusText = "Chubascos débiles";
+            document.getElementById('cardPrecipStatus').innerText = precipStatusText;
+        }
+
+        // Set active metric for chart
+        function setActiveMetric(metric) {
+            activeMetric = metric;
+            
+            // Update button styles
+            document.querySelectorAll('.metric-btn').forEach(btn => {
+                btn.className = "metric-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700";
+            });
+            const activeBtn = document.getElementById('btn-' + metric);
+            if (activeBtn) {
+                activeBtn.className = "metric-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-blue-600 text-white shadow-md shadow-blue-600/30";
+            }
+
+            const titleEl = document.getElementById('chartTitle');
+            const subtitleEl = document.getElementById('chartSubtitle');
+            const legendEl = document.getElementById('chartLegendCustom');
+
+            if (metric === 'temperature') {
+                titleEl.innerHTML = `<i class="fa-solid fa-chart-line text-blue-500"></i> Evolución de Temperatura del Aire (GFS)`;
+                subtitleEl.innerText = "Temperatura de aire (2m) y Sensación Térmica";
+                legendEl.innerHTML = `
+                    <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Temp (°C)</span>
+                    <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span> Sensación (°C)</span>
+                `;
+            } else if (metric === 'wind') {
+                titleEl.innerHTML = `<i class="fa-solid fa-wind text-blue-500"></i> Intensidad del Viento Patagónico (GFS)`;
+                subtitleEl.innerText = "Velocidad de viento sostenido y rachas (en nudos y km/h)";
+                legendEl.innerHTML = `
+                    <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> Viento Sostenido (Nudos)</span>
+                    <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> Rachas (Nudos)</span>
+                `;
+            } else if (metric === 'precipitation') {
+                titleEl.innerHTML = `<i class="fa-solid fa-cloud-rain text-blue-500"></i> Pronóstico de Precipitación GFS`;
+                subtitleEl.innerText = "Acumulado horario de lluvia y probabilidad (%)";
+                legendEl.innerHTML = `
+                    <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-cyan-500 inline-block"></span> Precipitación (mm)</span>
+                `;
+            } else if (metric === 'pressure') {
+                titleEl.innerHTML = `<i class="fa-solid fa-gauge text-blue-500"></i> Presión Atmosférica Superficial GFS`;
+                subtitleEl.innerText = "Evolución barométrica sobre Punta Arenas";
+                legendEl.innerHTML = `
+                    <span class="flex items-center gap-1.5 text-slate-300"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Presión (hPa)</span>
+                `;
+            }
+
+            updateChart();
+        }
+
+        // Initialize and update Chart.js
+        function updateChart() {
+            if (!globalWeatherData) return;
+            const hourly = globalWeatherData.hourly;
+
+            // Format labels for readable time
+            const labels = hourly.time.map(t => {
+                const date = new Date(t);
+                return date.toLocaleDateString('es-CL', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+            });
+
+            let datasets = [];
+            let yAxisLabel = '';
+
+            if (activeMetric === 'temperature') {
+                datasets = [
+                    {
+                        label: 'Temperatura Aire (°C)',
+                        data: hourly.temperature_2m,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 1
+                    },
+                    {
+                        label: 'Sensación Térmica (°C)',
+                        data: hourly.apparent_temperature,
+                        borderColor: '#06b6d4',
+                        borderWidth: 2,
+                        borderDash: [4, 4],
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }
+                ];
+                yAxisLabel = 'Temperatura (°C)';
+            } else if (activeMetric === 'wind') {
+                // Convert wind speed to knots for chart display
+                const windKnots = hourly.wind_speed_10m.map(v => kmhToKnots(v));
+                const gustsKnots = hourly.wind_gusts_10m.map(v => kmhToKnots(v));
+
+                datasets = [
+                    {
+                        label: 'Viento Sostenido (Nudos)',
+                        data: windKnots,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 1
+                    },
+                    {
+                        label: 'Rachas (Nudos)',
+                        data: gustsKnots,
+                        borderColor: '#f43f5e',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }
+                ];
+                yAxisLabel = 'Nudos (kt)';
+            } else if (activeMetric === 'precipitation') {
+                datasets = [
+                    {
+                        label: 'Precipitación (mm)',
+                        data: hourly.precipitation,
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 1
+                    }
+                ];
+                yAxisLabel = 'Milímetros (mm)';
+            } else if (activeMetric === 'pressure') {
+                datasets = [
+                    {
+                        label: 'Presión Superficial (hPa)',
+                        data: hourly.surface_pressure,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 1
+                    }
+                ];
+                yAxisLabel = 'hPa';
+            }
+
             const ctx = document.getElementById('gfsChart').getContext('2d');
-            const data = generateGFSData(currentHoursCount, currentLevel);
+            if (gfsChart) {
+                gfsChart.destroy();
+            }
 
             gfsChart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: [
-                        {
-                            label: 'Temperatura del Aire (°C)',
-                            data: data.temps,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.35,
-                            pointRadius: 2,
-                            pointHoverRadius: 6
-                        },
-                        {
-                            label: 'Sensación Térmica (°C)',
-                            data: data.feelsLike,
-                            borderColor: '#06b6d4',
-                            borderWidth: 2,
-                            borderDash: [4, 4],
-                            fill: false,
-                            tension: 0.35,
-                            pointRadius: 1
-                        }
-                    ]
-                },
+                data: { labels: labels, datasets: datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -397,30 +535,19 @@
                         tooltip: {
                             mode: 'index',
                             intersect: false,
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#f8fafc',
                             bodyColor: '#cbd5e1',
                             borderColor: '#334155',
                             borderWidth: 1,
                             padding: 12,
-                            boxPadding: 6,
                             callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += context.parsed.y + '°C';
-                                    }
-                                    return label;
-                                },
                                 afterBody: function(tooltipItems) {
                                     const index = tooltipItems[0].dataIndex;
-                                    // Retrieve wind data from global or reconstruct
-                                    const wKnot = gfsChart.data.customWindsKnots ? gfsChart.data.customWindsKnots[index] : 0;
-                                    const wKmh = gfsChart.data.customWindsKmh ? gfsChart.data.customWindsKmh[index] : 0;
-                                    return `Viento: ${wKnot} nudos (${wKmh} km/h)`;
+                                    const wKmh = hourly.wind_speed_10m[index];
+                                    const wKnot = kmhToKnots(wKmh);
+                                    const dir = getWindDirectionLabel(hourly.wind_direction_10m[index]);
+                                    return `Viento: ${wKnot.toFixed(1)} nudos (${wKmh.toFixed(1)} km/h) [${dir}]`;
                                 }
                             }
                         }
@@ -428,11 +555,12 @@
                     scales: {
                         x: {
                             grid: { color: 'rgba(51, 65, 85, 0.2)' },
-                            ticks: { color: '#94a3b8', font: { size: 10 }, maxTicksLimit: 8 }
+                            ticks: { color: '#94a3b8', font: { size: 10 }, maxTicksLimit: 10 }
                         },
                         y: {
                             grid: { color: 'rgba(51, 65, 85, 0.3)' },
-                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            title: { display: true, text: yAxisLabel, color: '#94a3b8', font: { size: 11 } }
                         }
                     },
                     interaction: {
@@ -442,119 +570,73 @@
                     }
                 }
             });
-
-            // Store custom dataset references for tooltip callback
-            gfsChart.data.customWindsKnots = data.windsKnots;
-            gfsChart.data.customWindsKmh = data.winds;
-
-            updateTopCards(data);
-            updateTable(data);
         }
 
-        // Update top summary metric cards with current GFS data snapshot
-        function updateTopCards(data) {
-            document.getElementById('cardTemp').innerText = data.temps[0] + '°C';
-            document.getElementById('cardSensacion').innerText = data.feelsLike[0] + '°C';
-            document.getElementById('cardWind').innerText = data.windsKnots[0] + ' nudos';
-            document.getElementById('cardWind').title = `${data.winds[0]} km/h`;
-            document.getElementById('cardWindGust').innerText = data.gustsKnots[0] + ' nudos';
-            document.getElementById('cardPressure').innerText = data.pressures[0] + ' hPa';
-            document.getElementById('cardHumidity').innerText = data.humidity[0] + '%';
-            document.getElementById('cardPrecip').innerText = data.precip[0] + ' mm/3h';
-            document.getElementById('skyCondition').innerText = data.conditions[0].text;
-
-            // Snow level estimation based on 850hpa temp
-            const snowLevelEstimate = Math.max(0, Math.round((data.temps[0] + 8) * 150));
-            document.getElementById('cardSnowLevel').innerText = snowLevelEstimate + ' m s.n.m.';
-        }
-
-        // Populate table with first 24 hours of forecast
+        // Populate detailed forecast table (next 48 hours)
         function updateTable(data) {
             const tbody = document.getElementById('forecastTableBody');
             tbody.innerHTML = '';
 
-            // Show next 8 steps (24 hours)
-            const limit = Math.min(8, data.labels.length);
+            const hourly = data.hourly;
+            const limit = Math.min(48, hourly.time.length);
+
             for (let i = 0; i < limit; i++) {
+                const dateObj = new Date(hourly.time[i]);
+                const timeStr = dateObj.toLocaleDateString('es-CL', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+                
+                const temp = hourly.temperature_2m[i];
+                const apparent = hourly.apparent_temperature[i];
+                const windKmh = hourly.wind_speed_10m[i];
+                const windGustKmh = hourly.wind_gusts_10m[i];
+                const windDir = getWindDirectionLabel(hourly.wind_direction_10m[i]);
+                const humidity = hourly.relative_humidity_2m[i];
+                const precip = hourly.precipitation[i];
+                const cloud = hourly.cloud_cover[i];
+
+                let conditionText = "Nublado";
+                let conditionIcon = "fa-cloud";
+                let conditionColor = "text-slate-400";
+
+                if (precip > 0.5) {
+                    conditionText = "Lluvia";
+                    conditionIcon = "fa-cloud-rain";
+                    conditionColor = "text-blue-400";
+                } else if (windKmh > 35) {
+                    conditionText = "Viento Fuerte";
+                    conditionIcon = "fa-wind";
+                    conditionColor = "text-amber-400";
+                } else if (cloud < 40) {
+                    conditionText = "Parcial / Despejado";
+                    conditionIcon = "fa-cloud-sun";
+                    conditionColor = "text-cyan-400";
+                }
+
                 const row = document.createElement('tr');
                 row.className = "hover:bg-slate-800/40 transition";
                 row.innerHTML = `
-                    <td class="py-3 px-4 font-medium text-white">${data.labels[i]}</td>
+                    <td class="py-3 px-4 font-medium text-white">${timeStr}</td>
                     <td class="py-3 px-4 flex items-center gap-2">
-                        <i class="fa-solid ${data.conditions[i].icon} ${data.conditions[i].color}"></i>
-                        <span>${data.conditions[i].text}</span>
+                        <i class="fa-solid ${conditionIcon} ${conditionColor}"></i>
+                        <span>${conditionText}</span>
                     </td>
-                    <td class="py-3 px-4 font-bold text-blue-400">${data.temps[i]}°C</td>
-                    <td class="py-3 px-4 text-cyan-400">${data.feelsLike[i]}°C</td>
-                    <td class="py-3 px-4 font-medium text-blue-200">${data.windsKnots[i]} nudos <span class="text-slate-400 text-[10px]">(${data.winds[i]} km/h)</span></td>
-                    <td class="py-3 px-4 text-slate-300">${data.gustsKnots[i]} nudos <span class="text-slate-500 text-[10px]">(${data.gusts[i]} km/h)</span></td>
-                    <td class="py-3 px-4">${data.humidity[i]}%</td>
-                    <td class="py-3 px-4 text-cyan-300">${data.precip[i]} mm</td>
+                    <td class="py-3 px-4 font-bold text-blue-400">${temp.toFixed(1)}°C</td>
+                    <td class="py-3 px-4 text-cyan-400">${apparent.toFixed(1)}°C</td>
+                    <td class="py-3 px-4 font-medium text-amber-300">${formatWind(windKmh)} <span class="text-slate-400 text-[10px]">(${windDir})</span></td>
+                    <td class="py-3 px-4 text-rose-300">${formatWind(windGustKmh)}</td>
+                    <td class="py-3 px-4">${humidity}%</td>
+                    <td class="py-3 px-4 text-cyan-300">${precip.toFixed(1)} mm</td>
                 `;
                 tbody.appendChild(row);
             }
         }
 
-        // Change Pressure Level Handler
-        function setLevel(level) {
-            currentLevel = level;
-            
-            // Update button styles
-            document.querySelectorAll('.level-btn').forEach(btn => {
-                btn.className = "level-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700";
-            });
-            const activeBtn = document.getElementById('btn-' + level);
-            if (activeBtn) {
-                activeBtn.className = "level-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold transition bg-blue-600 text-white shadow-md shadow-blue-600/30";
-            }
-
-            // Update info text
-            let levelDesc = "Superficie (2m)";
-            if (level === '925hpa') levelDesc = "Nivel de Presión 925 hPa (~750 m de altura)";
-            if (level === '850hpa') levelDesc = "Nivel de Presión 850 hPa (~1,500 m de altura)";
-            if (level === '500hpa') levelDesc = "Nivel de Presión 500 hPa (~5,500 m de altura - Tropósfera media)";
-            document.getElementById('chartInfoText').innerText = `Mostrando datos para el nivel: ${levelDesc}`;
-
-            refreshChart();
-        }
-
-        // Change Time Range Handler
-        function updateChartRange() {
-            const select = document.getElementById('timeRangeSelect');
-            currentHoursCount = parseInt(select.value);
-            refreshChart();
-        }
-
-        // Refresh Chart data
-        function refreshChart() {
-            const newData = generateGFSData(currentHoursCount, currentLevel);
-            gfsChart.data.labels = newData.labels;
-            gfsChart.data.datasets[0].data = newData.temps;
-            gfsChart.data.datasets[1].data = newData.feelsLike;
-            gfsChart.data.customWindsKnots = newData.windsKnots;
-            gfsChart.data.customWindsKmh = newData.winds;
-            gfsChart.update();
-            updateTopCards(newData);
-            updateTable(newData);
-        }
-
-        // Refresh animation trigger
-        function refreshData() {
-            const syncBadge = document.getElementById('syncStatus');
-            syncBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-400 animate-spin"></span><span>Actualizando GFS...</span>`;
-            setTimeout(() => {
-                refreshChart();
-                syncBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>GFS Sincronizado (Recién actualizado)</span>`;
-            }, 600);
-        }
-
-        function openExternalNOAA() {
-            window.open('https://www.emc.ncep.noaa.gov/emc/pages/numerical_forecast_systems/gfs.php', '_blank');
+        function openOpenMeteoDocs() {
+            window.open('https://open-meteo.com/en/docs/gfs-api', '_blank');
         }
 
         // Run on load
         window.onload = function() {
-            initChart();
+            fetchGFSData();
         };
     </script>
 </body>
